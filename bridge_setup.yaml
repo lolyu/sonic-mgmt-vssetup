@@ -1,0 +1,27 @@
+---
+- name: install bridge-utils
+  apt:
+    name: bridge-utils
+    state: present
+    update_cache: True
+    cache_valid_time: 3600
+  become: True
+
+- name: add bridge br1
+  shell: brctl addbr br1
+  register: add_result
+  ignore_errors: True
+  become: True
+
+- debug: var=add_result
+
+- fail: msg="Error occured in adding bridge br1"
+  when: add_result is failed and not 'already exists' in add_result.stderr
+
+- name: config internal mgmt network
+  shell: ifconfig br1 10.250.0.1/24
+  become: True
+
+- name: activate internal mgmt network
+  shell: ifconfig br1 up
+  become: True
