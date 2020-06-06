@@ -1,0 +1,28 @@
+---
+- name: check cEOS image
+  set_fact:
+    ceos_files_lst: "{{ query('fileglob', '%s/cEOS*' % save_dir) }}"
+
+- debug: var=ceos_files_lst
+
+- name: download cEOS image
+  get_url:
+    url: "{{ ceos_link }}"
+    dest: "{{ save_dir }}"
+  register: download_result
+  when: ceos_files_lst|length == 0
+
+- name: set cEOS file path
+  set_fact:
+    ceos_file: "{{ ceos_files_lst[0] if ceos_files_lst else download_result.dest }}"
+
+- debug: var=ceos_file
+
+- name: set docker cEOS image
+  set_fact:
+    ceos_image: 'ceosimage{{ ":" }}{{ ceos_file|basename|regex_replace("cEOS\d{2}-lab-([\w.]*).tar.xz", "\1") }}'
+
+- debug: var=ceos_image
+
+- name: import cEOS file
+  command: "docker import {{ ceos_file }} {{ ceos_image }}"
