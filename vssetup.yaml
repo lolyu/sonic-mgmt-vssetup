@@ -27,7 +27,7 @@
     - include_tasks: prepare_ceos.yaml
       vars:
         save_dir: "{{ workspace }}"
-      when: not 'ceosimage' in image_ls_result.stdout
+      when: not 'ceosimage' in image_ls_result.stdout|default("")
 
     - include_tasks: prepare_sonic_image.yaml
       vars:
@@ -36,7 +36,7 @@
     - include_tasks: prepare_sonic_mgmt.yaml
       vars:
         save_dir: "{{ workspace }}"
-      when: not 'docker-sonic-mgmt' in image_ls_result.stdout
+      when: not 'docker-sonic-mgmt' in image_ls_result.stdout|default("")
 
     - name: set sonic-mgmt directory
       set_fact:
