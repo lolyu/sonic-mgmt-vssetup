@@ -1,0 +1,91 @@
+---
+- name: get current user
+  shell: whoami
+  register: whoami_result
+
+- name: set current user
+  set_fact:
+    current_user: "{{ whoami_result.stdout }}"
+
+- name: modify virtual testbed
+  lineinfile:
+    dest: "{{ sonic_mgmt_dir }}/ansible/veos.vtb"
+    state: present
+    regexp: "STR-ACS-VSERV-01 ansible_host=172.17.0.1 ansible_user=use_own_value"
+    line: "STR-ACS-VSERV-01 ansible_host=172.17.0.1 ansible_user={{ current_user }}"
+
+- name: get current user uid
+  command: id -u {{ current_user }}
+  register: uid_result
+
+- name: get current user gid
+  command: id -g {{ current_user }}
+  register: gid_result
+
+- name: set current user uid
+  set_fact:
+    current_uid: "{{ uid_result.stdout }}"
+
+- name: set current user gid
+  set_fact:
+    current_gid: "{{ gid_result.stdout }}"
+
+- debug: var=current_user
+
+- debug: var=current_uid
+
+- debug: var=current_gid
+
+- name: add user {{ current_user }} in sonic-mgmt container
+  user:
+    name: "{{ current_user }}"
+    create_home: True
+    uid: "{{ current_uid|int }}"
+    generate_ssh_key: True
+  become: True
+  delegate_to: "{{ sonic_mgmt_cont }}"
+
+- name: allow {{ current_user }} group to have passwordless sudo in container
+  lineinfile:
+    dest: /etc/sudoers
+    state: present
+    regexp: "^{{ current_user }}"
+    line: "{{ current_user }} ALL=(ALL) NOPASSWD: ALL"
+    validate: "visudo -cf %s"
+  become: True
+  delegate_to: "{{ sonic_mgmt_cont }}"
+
+- name: add sonic-mgmt container to hosts
+  add_host:
+    name: "{{ sonic_mgmt_cont }}"
+    ansible_connection: docker
+    ansible_user: "{{ current_user }}"
+
+- name: disable strict host key checking of sonic-mgmt
+  lineinfile:
+    dest: /etc/ssh/ssh_config
+    state: present
+    regexp: "#   StrictHostKeyChecking ask"
+    line: "StrictHostKeyChecking no"
+  become: True
+  delegate_to: "{{ sonic_mgmt_cont }}"
+
+- name: restart ssh service
+  command: /etc/init.d/ssh restart
+  become: True
+  delegate_to: "{{ sonic_mgmt_cont }}"
+
+- name: get ssh pubkey from container
+  command: cat ~/.ssh/id_rsa.pub
+  register: cat_result
+  delegate_to: "{{ sonic_mgmt_cont }}"
+
+- name: store ssh pubkey in container
+  set_fact:
+    cont_pubkey: "{{ cat_result.stdout }}"
+
+- name: set ssh pubkey taken from sonic-mgmt container
+  authorized_key:
+    user: "{{ current_user }}"
+    state: present
+    key: "{{ cont_pubkey }}"

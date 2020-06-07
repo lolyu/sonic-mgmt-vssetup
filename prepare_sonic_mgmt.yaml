@@ -1,0 +1,14 @@
+---
+- name: download pre-built sonic-mgmt image
+  get_url:
+    url: "{{ sonic_mgmt_link }}"
+    dest: "{{ save_dir }}"
+  register: download_result
+
+- debug: var=download_result.dest
+
+- name: load sonic-mgmt image
+  docker_image:
+    name: "docker-sonic-image"
+    load_path: "{{ download_result.dest }}"
+    source: load

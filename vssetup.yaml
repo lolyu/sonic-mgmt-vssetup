@@ -1,0 +1,73 @@
+---
+- name: setup virtual testbed
+  hosts: localhost
+  gather_facts: False
+
+  vars:
+    ceos_link:
+    sonic_vm_image_link: https://sonic-jenkins.westus2.cloudapp.azure.com/job/vs/job/buildimage-vs-image/lastSuccessfulBuild/artifact/target/sonic-vs.img.gz
+    sonic_mgmt_link: https://sonic-jenkins.westus2.cloudapp.azure.com/job/bldenv/job/docker-sonic-mgmt/lastSuccessfulBuild/artifact/sonic-buildimage/target/docker-sonic-mgmt.gz
+    workspace: ~/workspace
+    sonic_vm_image_dir: ~/sonic-vm/images
+    sonic_mgmt_cont: sonic-mgmt
+
+  tasks:
+    - import_tasks: bridge_setup.yaml
+
+    - name: create workspace
+      file:
+        path: "{{ workspace }}"
+        state: directory
+        mode: "0755"
+
+    - name: check if cEOS image is present
+      command: docker images
+      register: image_ls_result
+
+    - include_tasks: prepare_ceos.yaml
+      vars:
+        save_dir: "{{ workspace }}"
+      when: not 'ceosimage' in image_ls_result.stdout
+
+    - include_tasks: prepare_sonic_image.yaml
+      vars:
+        save_dir: "{{ workspace }}"
+
+    - include_tasks: prepare_sonic_mgmt.yaml
+      vars:
+        save_dir: "{{ workspace }}"
+      when: not 'docker-sonic-mgmt' in image_ls_result.stdout
+
+    - name: set sonic-mgmt directory
+      set_fact:
+        sonic_mgmt_dir: "{{ workspace }}/sonic-mgmt"
+
+    - name: remove sonic-mgmt directory in workspace if present
+      file:
+        path: "{{ sonic_mgmt_dir }}"
+        state: absent
+
+    - name: clone sonic-mgmt
+      git:
+        repo: https://github.com/Azure/sonic-mgmt
+        dest: "{{ sonic_mgmt_dir }}"
+
+    - name: create sonic-mgmt container
+      docker_container:
+        name: "{{ sonic_mgmt_cont }}"
+        image: docker-sonic-mgmt
+        volumes:
+          - "{{ sonic_mgmt_dir }}:/data"
+        state: started
+        restart: no
+        tty: yes
+        detach: True
+
+    - name: add sonic-mgmt container to hosts
+      add_host:
+        name: "{{ sonic_mgmt_cont }}"
+        ansible_connection: docker
+
+    - include_tasks: prepare_user.yaml
+      vars:
+        save_dir: "{{ workspace }}"

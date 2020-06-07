@@ -1,0 +1,28 @@
+---
+- name: create sonic-vm directory
+  file:
+    path: "{{ sonic_vm_image_dir }}"
+    state: directory
+    mode: "0755"
+
+- name: check if sonic-vs image exists
+  stat:
+    path: "{{ save_dir }}/sonic-vs.img"
+  register: stat_result
+
+- name: download, unarchive, and copy sonic vm image
+  block:
+    - name: download sonic-vs image
+      get_url:
+        url: "{{ sonic_vm_image_link }}"
+        dest: "{{ save_dir }}"
+      register: download_result
+
+    - name: unarchive the sonic-vs
+      shell: gzip -d {{ download_result.dest }}
+
+    - name: copy sonic vm image
+      copy:
+        src: "{{ save_dir }}/sonic-vs.img"
+        dest: "{{ sonic_vm_image_dir }}"
+  when: not stat_result.stat.exists
